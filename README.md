@@ -4,6 +4,11 @@
 
 Whether you want to show a specific webpage to your family (using a fast backend screencasting process) or quickly cast a photo from your phone's camera roll directly onto your MagicMirror screen, `MMM-RemoteView` handles it seamlessly without requiring any apps to be installed.
 
+> **Why use this module over MMM-EmbedURL or MMM-WebView?**
+> Standard modules often rely on `<iframe>` tags or Electron's built-in `webview` components. However, many users run MagicMirror exclusively through a standard web browser (like Firefox or Midori in server-only mode) instead of the Electron app. In a standard browser, displaying websites securely is highly restricted by `X-Frame-Options` and `CORS` headers (blocking most modern websites from being embedded).
+> 
+> `MMM-RemoteView` solves this by taking a blazing-fast server-side screenshot of the website using `wkhtmltoimage`, bypassing all iframe restrictions completely and safely displaying the image of the website instead!
+
 ## Features
 
 - **📱 Mobile Web Interface:** Provides a slick, responsive, and touch-friendly mobile interface accessible from any device on your local network.
