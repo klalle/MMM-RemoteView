@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MagicMirror Remote</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-sizing: border-box;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+      text-align: center;
+    }
+    .status {
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background-color: red;
+    }
+    .status-dot.connected {
+      background-color: #4CAF50;
+    }
+    .card {
+      background-color: #1e1e1e;
+      border-radius: 12px;
+      padding: 20px;
+      width: 100%;
+      max-width: 400px;
+      margin-bottom: 20px;
+      box-sizing: border-box;
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 18px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+    }
+    input[type="url"], input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background-color: #2a2a2a;
+      color: white;
+      font-size: 16px;
+      margin-bottom: 15px;
+      box-sizing: border-box;
+    }
+    input[type="file"] {
+      width: 100%;
+      margin-bottom: 15px;
+      font-size: 16px;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      background-color: #007bff;
+      color: white;
+      transition: background-color 0.2s;
+    }
+    button:active {
+      background-color: #0056b3;
+    }
+    .btn-danger {
+      background-color: #dc3545;
+      margin-top: 10px;
+    }
+    .btn-danger:active {
+      background-color: #a71d2a;
+    }
+    .scroll-controls {
+      display: none;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .error-msg {
+      color: #ff6b6b;
+      margin-top: 10px;
+      font-size: 14px;
+      text-align: center;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>MagicMirror Remote</h1>
+  
+  <div class="status">
+    <div id="statusDot" class="status-dot"></div>
+    <span id="statusText">Disconnected</span>
+  </div>
+
+  <div class="card">
+    <h2>1. Cast Website</h2>
+    <input type="url" id="urlInput" placeholder="https://..." value="https://">
+    <button id="btnShowUrl">Cast to mirror</button>
+    
+    <div id="scrollControls" class="scroll-controls">
+      <button id="btnScrollUp">↑ Scroll Up</button>
+      <button id="btnScrollDown">↓ Scroll Down</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Upload Image</h2>
+    <input type="file" id="fileInput" accept="image/jpeg, image/png, image/gif, image/webp" style="padding: 15px; background: #2a2a2a; border-radius: 8px; border: 1px solid #444; margin-bottom: 20px;">
+    <button id="btnUploadImage" style="font-size: 18px; padding: 20px;">Send to mirror</button>
+    <div id="uploadError" class="error-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. Display Controls</h2>
+    <button id="btnHide" class="btn-danger" style="font-size: 18px; padding: 20px;">Close / return to mirror</button>
+  </div>
+
+  <script>
+    let ws;
+    let currentY = 0;
+    let isUrlActive = false;
+
+    function connectWebSocket() {
+      ws = new WebSocket(`ws://${location.hostname}:${location.port}`);
+
+      ws.onopen = () => {
+        document.getElementById("statusDot").classList.add("connected");
+        document.getElementById("statusText").innerText = "Connected";
+      };
+
+      ws.onclose = () => {
+        document.getElementById("statusDot").classList.remove("connected");
+        document.getElementById("statusText").innerText = "Disconnected";
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.action === "showUrl") {
+            isUrlActive = true;
+            document.getElementById("scrollControls").style.display = "grid";
+            currentY = 0;
+          } else if (data.action === "showImage" || data.action === "hide") {
+            isUrlActive = false;
+            document.getElementById("scrollControls").style.display = "none";
+          }
+        } catch (e) {
+          console.error("Error parsing WS message:", e);
+        }
+      };
+    }
+
+    function sendWsMessage(msg) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(msg));
+      }
+    }
+
+    // Connect initially
+    connectWebSocket();
+
+    // Show URL
+    document.getElementById("btnShowUrl").addEventListener("click", () => {
+      const url = document.getElementById("urlInput").value.trim();
+      if (url) {
+        sendWsMessage({ action: "showUrl", url: url });
+        isUrlActive = true;
+        document.getElementById("scrollControls").style.display = "grid";
+        currentY = 0;
+      }
+    });
+
+    // Scroll
+    document.getElementById("btnScrollUp").addEventListener("click", () => {
+      currentY = Math.max(0, currentY - 300);
+      sendWsMessage({ action: "scroll", x: 0, y: currentY });
+    });
+
+    document.getElementById("btnScrollDown").addEventListener("click", () => {
+      currentY += 300;
+      sendWsMessage({ action: "scroll", x: 0, y: currentY });
+    });
+
+    // Hide
+    document.getElementById("btnHide").addEventListener("click", () => {
+      sendWsMessage({ action: "hide" });
+      isUrlActive = false;
+      document.getElementById("scrollControls").style.display = "none";
+    });
+
+    // Upload Image
+    document.getElementById("btnUploadImage").addEventListener("click", async () => {
+      const fileInput = document.getElementById("fileInput");
+      const errorMsg = document.getElementById("uploadError");
+      errorMsg.style.display = "none";
+
+      if (fileInput.files.length === 0) {
+        errorMsg.innerText = "Please select a file first.";
+        errorMsg.style.display = "block";
+        return;
+      }
+
+      const file = fileInput.files[0];
+      const formData = new FormData();
+      formData.append("image", file);
+
+      try {
+        const response = await fetch("/upload", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error("Upload failed.");
+        }
+
+        // The server will broadcast the showImage message
+        fileInput.value = "";
+        isUrlActive = false;
+        document.getElementById("scrollControls").style.display = "none";
+      } catch (err) {
+        errorMsg.innerText = err.message || "An error occurred.";
+        errorMsg.style.display = "block";
+      }
+    });
+  </script>
+</body>
+</html>
